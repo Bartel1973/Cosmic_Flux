@@ -1,0 +1,367 @@
+-- title:  Cosmic Flux
+-- author: OHM-ego
+-- desc:   shading rasterfigures - 3d starfield - sinuscroller - spiral scroller - chiptune
+-- script: lua
+
+t=0
+particles={}
+n=200
+mode=0
+transition=0
+
+-- Music
+-- Variable for multitrack
+-- code of Mantratronic - tipped by Enfys
+-- trackcurrent=-1
+-- not used in this sketch
+music(0)
+
+-- Starfield
+stars={}
+numstars=200
+
+-- Shape definitions
+shapes={
+ 
+ -- BAll
+ function(i)
+  local a=i*2.4
+  local b=i*3.7
+  return math.sin(a)*40*math.cos(b),
+         math.cos(a)*40,
+         math.sin(a)*40*math.sin(b)
+ end,
+ 
+ -- CUBE
+ function(i)
+  local side=math.floor(i*6/n)
+  local t=(i*6/n-side)*2-1
+  if side==0 then return 40,t*40,40
+  elseif side==1 then return 40,t*40,-40
+  elseif side==2 then return t*40,40,40
+  elseif side==3 then return t*40,-40,40
+  elseif side==4 then return t*40,40,-40
+  else return -40,t*40,40 end
+ end,
+ 
+ -- DONUT
+ function(i)
+  local a=i*6.28
+  local b=i*13.5
+  local R=40
+  local r=15
+  return (R+r*math.cos(b))*math.cos(a),
+         r*math.sin(b),
+         (R+r*math.cos(b))*math.sin(a)
+ end,
+ 
+ -- HELIX
+ function(i)
+  local a=i*15
+  local h=i*80-40
+  return math.cos(a)*30,h,math.sin(a)*30
+ end,
+ 
+ -- WAVE GRID
+ function(i)
+  local gx=i%23-11
+  local gz=math.floor(i/23)-11
+  return gx*7,
+         math.sin(gx*0.5+t*0.1)*math.cos(gz*0.5+t*0.08)*15,
+         gz*7
+ end,
+ 
+ -- BALL EXPLOSION
+ function(i)
+  local a=i*2.4
+  local b=i*3.7
+  local r=30+math.sin(t*0.05)*20
+  return math.sin(a)*r*math.cos(b),
+         math.cos(a)*r,
+         math.sin(a)*r*math.sin(b)
+ end,
+ 
+ -- DNA DOUBLE HELIX
+ function(i)
+  local a=i*20
+  local h=i*100-50
+  local r=25
+  if i%2<1 then
+   return math.cos(a)*r,h,math.sin(a)*r
+  else
+   return math.cos(a+3.14)*r,h,math.sin(a+3.14)*r
+  end
+ end,
+ 
+ -- PYRAMID
+ function(i)
+  local h=i*80-40
+  local layer=math.abs(h)/5
+  local a=i*8
+  local r=40-layer
+  if r<2 then r=2 end
+  return math.cos(a)*r,h,math.sin(a)*r
+ end
+}
+
+
+function init()
+--Initialize particles
+ for i=1,n do
+  local x,y,z=shapes[1](i/n)
+  particles[i]={
+   x=x,y=y,z=z,
+   tx=x,ty=y,tz=z,
+   vx=0,vy=0,vz=0
+  }
+ end
+ 
+-- Initialize starfield
+ for i=1,numstars do
+  stars[i]={
+   x=math.random(-200,200),
+   y=math.random(-200,200),
+   z=math.random(50,400)
+  }
+ end
+end
+
+-- Set new target shape
+function morph()
+ mode=(mode%#shapes)+1
+ for i=1,n do
+  local p=particles[i]
+  local tx,ty,tz=shapes[mode](i/n)
+  p.tx=tx
+  p.ty=ty
+  p.tz=tz
+ end
+ transition=0
+end
+
+-- Variable for multitrack
+-- code of Mantratronic - tipped by Enfys
+-- credits 4 Trepaan - Enfys
+-- couldn't get my music playing
+-- took this snippet of code
+-- lines 1238 - 1243 
+-- from Crack of Doom
+-- in the end I did not need this snippet
+-- just had to place the music-command out of the TIC function
+
+--function checkmusic()
+--	if peek(0x13ffc) == 255 then
+-- 	trackcurrent = trackcurrent + 1
+-- 	music(trackcurrent,-1,-1,true)
+-- end
+--end
+-- not used in this sketch
+
+function TIC()
+-- Variable for multitrack
+-- code of Mantratronic - tipped by Enfys
+--checkmusic()
+ if t==0 then init() end
+ cls(0)
+ 
+ -- Morph timer
+ transition=transition+1
+ if transition>90 then morph() end
+ 
+ local w,h=240,136
+ local cx,cy=w/2,h/2
+ 
+ -- Draw starfield first (background layer)
+ for i=1,numstars do
+  local star=stars[i]
+  
+  -- Move star towards camera
+  star.z=star.z-1.5
+  
+  -- Reset star when it passes camera
+  if star.z<1 then
+   star.x=math.random(-200,200)
+   star.y=math.random(-200,200)
+   star.z=400
+  end
+  
+  -- Project 3D to 2D
+  local scale=200/star.z
+  local sx=cx+star.x*scale
+  local sy=cy+star.y*scale
+  
+  if sx>=0 and sx<w and sy>=0 and sy<h then
+   -- Color and size based on depth
+   local brightness=math.floor((1-star.z/400)*3)
+   local col=1
+   if brightness==1 then col=2
+   elseif brightness==2 then col=13
+   elseif brightness>=3 then col=14
+   end
+   
+   -- Closer stars are bigger
+   if star.z<100 then
+    circ(sx,sy,1,col)
+   else
+    pix(sx,sy,col)
+   end
+  end
+ end
+ 
+ -- Rotation of rodrigues
+ local rx=math.sin(t*0.01)*0.5
+ local ry=t*0.02
+ 
+ -- Sort particles by depth for proper rendering
+ local sorted={}
+ for i=1,n do
+  local p=particles[i]
+  
+ -- Smooth interpolation to target
+  -- local ease=transition/180
+  -- ease=ease*ease*(3-2*ease) -- smoothstep
+  -- not longer used, but left in 4 fut ref
+  -- and also I'm to scared to delete code
+  p.x=p.x+(p.tx-p.x)*0.05
+  p.y=p.y+(p.ty-p.y)*0.05
+  p.z=p.z+(p.tz-p.z)*0.05
+  
+  -- 3D rotation
+  local x,y,z=p.x,p.y,p.z
+  
+  -- Rotate Y
+  local x1=x*math.cos(ry)-z*math.sin(ry)
+  local z1=x*math.sin(ry)+z*math.cos(ry)
+  
+  -- Rotate X
+  local y1=y*math.cos(rx)-z1*math.sin(rx)
+  local z2=y*math.sin(rx)+z1*math.cos(rx)
+  
+  sorted[i]={
+   x=x1,y=y1,z=z2,
+   idx=i
+  }
+ end
+ 
+ -- Sort by Z (back to front)
+ for i=1,n-1 do
+  for j=i+1,n do
+   if sorted[i].z>sorted[j].z then
+    sorted[i],sorted[j]=sorted[j],sorted[i]
+   end
+  end
+ end
+ 
+ -- Draw particles
+ for i=1,n do
+  local s=sorted[i]
+  local z=s.z+150
+  
+  if z>10 then
+   local scale=400/z
+   local sx=cx+s.x*scale
+   local sy=cy+s.y*scale
+   
+   if sx>=0 and sx<w and sy>=0 and sy<h then
+    -- Size based on depth
+    local size=math.floor(scale*0.4)
+    if size<1 then size=1 end
+    
+    -- Color based on depth and transition
+    local c=2
+    local depth_ratio=z/200
+    if depth_ratio<0.4 then c=12
+    elseif depth_ratio<0.6 then c=13
+    elseif depth_ratio<0.8 then c=3
+    elseif depth_ratio<1.0 then c=2
+    else c=1 end
+    
+    -- Highlight during transition
+    if transition<20 then
+     c=c+2
+     if c>15 then c=15 end
+    end
+    
+    -- Draw actual particle
+    if size==1 then
+     pix(sx,sy,c)
+    else
+     for dy=-size,size do
+      for dx=-size,size do
+       if dx*dx+dy*dy<=size*size then
+        pix(sx+dx,sy+dy,c)
+       end
+      end
+     end
+    end
+   end
+  end
+ end
+ 
+ t=t+1
+ 
+-- Sine wave scroller in vibrant green
+ local top_txt="     COSMIC FLUX - a one screen compo filler - made by OHM-ego of RRBS^F.Sys 4 R-Sync 2026. Music done by CUMULUS BRAIN (thx mate) - special thanks @ENFYS for the advice on the music-command - GREETZ 2 CYBERPRIEST who cannot attend this party - all RBBS members and some of my favorite MUSIC  artists - in alphabetical order Bacter&Saga, Bjaan, Danko, H0ffman, Mosaik, Planet Boelex, Teo and all Demosceners - may y'all live to see the new dawn - peace I'm out a here. Drop mic!!!                          "
+ local scroll_speed=t*0.75
+ 
+ for i=1,#top_txt do
+  local char=top_txt:sub(i,i)
+  local x_pos=i*6-scroll_speed%(#top_txt*6)
+  
+  -- Sine wave motion
+  local wave=math.sin((i*0.3)+(t*0.08))*12
+  local y_pos=20+wave
+  
+  -- Vibrant green colors with depth variation
+  local col=6  -- Base green
+  if wave>6 then col=7    -- Lighter green at top
+  elseif wave<-6 then col=5  -- Darker green at bottom
+  end
+  
+  if x_pos>-6 and x_pos<w+6 then
+   print(char,x_pos,y_pos,col,true)
+   
+   -- Add glow effect
+   print(char,x_pos,y_pos-1,6,true)
+  end
+  
+  -- Wrap around for seamless loop
+  if x_pos<-6 then
+   print(char,x_pos+#top_txt*6,y_pos,col,true)
+   print(char,x_pos+#top_txt*6,y_pos-1,6,true)
+  end
+ end
+ 
+ -- Single Spiral Scroller
+ local txt="OHM|CB - RBBS^F.SyS"
+ local center_x=w/2
+ local center_y=h-40
+ 
+ for i=1,#txt do
+  local c=txt:sub(i,i)
+  
+  -- Spiral parameters
+  local angle=i*0.3-t*0.025
+  local radius=50+i*0.5
+  
+  -- Calculate spiral position
+  local x=center_x+math.cos(angle)*radius
+  local y=center_y+math.sin(angle)*radius*0.5 -- flatten vertically
+  
+  -- Depth based on angle (for 3D effect)
+  local depth=math.sin(angle)*0.5+0.5
+  
+  -- Color based on depth
+  local col=8+math.floor(depth*5)
+  if col>13 then col=13 end
+  
+  if x>-10 and x<w+10 and y>-10 and y<h+10 then
+   print(c,x,y,col,true)
+   
+   -- Add glow when in front
+   if depth>0.7 then
+   print(c,x-1,y,col-2,true)
+   end
+  end
+ end
+end
